@@ -30,6 +30,15 @@
     }
   },
   "navigation": {
+    "global": {
+      "anchors": [
+        {
+          "anchor": "StageSnap app",
+          "icon": "house",
+          "href": "https://stagesnap.ai"
+        }
+      ]
+    },
     "tabs": [
       {
         "tab": "Documentation",
@@ -47,7 +56,8 @@
             "pages": [
               "guides/stage-a-room",
               "guides/generate-a-video",
-              "guides/webhooks"
+              "guides/webhooks",
+              "guides/setup-campaigns-to-send-postcars"
             ]
           }
         ]
@@ -71,16 +81,7 @@
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "StageSnap app",
-          "href": "https://stagesnap.ai",
-          "icon": "house"
-        }
-      ]
-    }
+    ]
   },
   "contextual": {
     "options": [
