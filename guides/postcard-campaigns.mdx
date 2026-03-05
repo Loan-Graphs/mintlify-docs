@@ -1,0 +1,373 @@
+---
+title: Postcard campaigns and CRM integration
+description: Set up one-time and recurring postcard campaigns via API, then route landing page leads back into your CRM.
+---
+
+StageSnap's postcard system lets you mail personalized AI-staged postcards to addresses near any property, then capture the homeowners who scan the QR code as leads in your CRM. This guide covers the end-to-end setup: campaign creation, address ingestion, recurring sends, and piping confirmed leads into your CRM.
+
+## How it works
+
+```
+Your CRM / script
+      │
+      │  POST /api/postcards/ingest
+      ▼
+StageSnap queues postcards
+      │
+      │  PCM provider prints + mails
+      ▼
+Homeowner receives postcard → scans QR code
+      │
+      ▼
+Personalized landing page (/postcard/{token})
+      │
+      │  Homeowner confirms address
+      ▼
+Scan recorded → webhook fires → lead in your CRM
+```
+
+---
+
+## Step 1: Create a campaign
+
+Create a campaign in the [Postcards tab](https://stagesnap.ai/postcards) of the StageSnap app. You need to do this once per campaign type (for example, one campaign for interior staging and one for exterior).
+
+When you save the campaign, note:
+
+- **Campaign ID** — visible in the URL after you click the campaign row, or via the app interface
+- **CRM Webhook Token** — shown in the campaign row; used to authenticate both inbound and outbound webhook calls
+
+<Tip>
+  A single campaign can run indefinitely. You don't need to create a new campaign for each batch of postcards—just keep ingesting new addresses into the same campaign.
+</Tip>
+
+---
+
+## Step 2: Ingest addresses and queue sends
+
+The ingest endpoint adds recipient addresses to a campaign and immediately queues postcards for printing and mailing.
+
+### Authentication
+
+The ingest API uses a server-to-server API key stored in your StageSnap environment as `POSTCARDS_INGEST_API_KEY`. Contact support to get your key.
+
+```
+Authorization: Bearer <POSTCARDS_INGEST_API_KEY>
+```
+
+### One-time send
+
+Send a list of addresses once—for example, every home within half a mile of a new listing.
+
+```bash cURL
+curl -X POST https://stagesnap.ai/api/postcards/ingest \
+  -H "Authorization: Bearer $POSTCARDS_INGEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "campaignId": "your_campaign_id",
+    "recipients": [
+      {
+        "addressLine1": "456 Oak Ave",
+        "city": "Austin",
+        "state": "TX",
+        "postalCode": "78701"
+      },
+      {
+        "addressLine1": "789 Elm St",
+        "city": "Austin",
+        "state": "TX",
+        "postalCode": "78702",
+        "ownerName": "Jane Smith"
+      }
+    ]
+  }'
+```
+
+Response:
+
+```json
+{ "ok": true, "created": 2 }
+```
+
+### Find nearest addresses automatically
+
+Before ingesting, use the nearest-address lookup to find homes around any property.
+
+```bash cURL
+curl -X POST https://stagesnap.ai/api/postcards/nearest \
+  -H "Authorization: Bearer $POSTCARDS_INGEST_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "businessAddress": "123 Main St, Austin TX 78701",
+    "count": 50
+  }'
+```
+
+Response:
+
+```json
+{
+  "nearest": [
+    {
+      "addressLine1": "124 Main St",
+      "city": "Austin",
+      "state": "TX",
+      "postalCode": "78701",
+      "distanceMiles": 0.01
+    }
+  ]
+}
+```
+
+Then pass the `nearest` array directly into the ingest endpoint.
+
+### Recipient fields
+
+| Field          | Required | Description                        |
+| -------------- | -------- | ---------------------------------- |
+| `addressLine1` | Yes      | Street address                     |
+| `city`         | Yes      | City                               |
+| `state`        | Yes      | 2-letter state code                |
+| `postalCode`   | Yes      | ZIP/postal code                    |
+| `addressLine2` | No       | Apt, suite, unit                   |
+| `country`      | No       | Default: `"US"`                    |
+| `ownerName`    | No       | Personalizes the postcard greeting |
+| `lat`          | No       | Pre-geocoded latitude              |
+| `lng`          | No       | Pre-geocoded longitude             |
+
+---
+
+## Step 3: Set up recurring sends
+
+For ongoing campaigns—for example, mailing every home that comes within a mile of a new listing each week—run the nearest + ingest flow on a schedule.
+
+StageSnap deduplicates recipients per campaign automatically, so re-ingesting an address that already received a postcard will not trigger a duplicate send.
+
+<CodeGroup>
+```javascript Node.js (cron)
+// Run weekly with node-cron or a hosted scheduler (Railway, Render, etc.)
+import cron from 'node-cron';
+
+const INGEST_KEY = process.env.POSTCARDS_INGEST_API_KEY;
+const BASE_URL = 'https://stagesnap.ai';
+const CAMPAIGN_ID = 'your_campaign_id';
+const LISTING_ADDRESS = '123 Main St, Austin TX 78701';
+
+cron.schedule('0 9 * * 1', async () => { // Every Monday at 9 AM
+  // 1. Find nearest 100 homes
+  const nearestRes = await fetch(`${BASE_URL}/api/postcards/nearest`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${INGEST_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ businessAddress: LISTING_ADDRESS, count: 100 }),
+  });
+  const { nearest } = await nearestRes.json();
+
+  // 2. Ingest them into the campaign
+  await fetch(`${BASE_URL}/api/postcards/ingest`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${INGEST_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ campaignId: CAMPAIGN_ID, recipients: nearest }),
+  });
+
+  console.log(`Ingested ${nearest.length} addresses`);
+});
+```
+
+```python Python (cron)
+import requests, schedule, time, os
+
+INGEST_KEY = os.environ["POSTCARDS_INGEST_API_KEY"]
+BASE_URL = "https://stagesnap.ai"
+CAMPAIGN_ID = "your_campaign_id"
+LISTING_ADDRESS = "123 Main St, Austin TX 78701"
+HEADERS = {"Authorization": f"Bearer {INGEST_KEY}", "Content-Type": "application/json"}
+
+def send_weekly_batch():
+    # 1. Find nearest 100 homes
+    nearest = requests.post(
+        f"{BASE_URL}/api/postcards/nearest",
+        headers=HEADERS,
+        json={"businessAddress": LISTING_ADDRESS, "count": 100},
+    ).json().get("nearest", [])
+
+    # 2. Ingest them
+    result = requests.post(
+        f"{BASE_URL}/api/postcards/ingest",
+        headers=HEADERS,
+        json={"campaignId": CAMPAIGN_ID, "recipients": nearest},
+    ).json()
+    print(f"Ingested: {result}")
+
+schedule.every().monday.at("09:00").do(send_weekly_batch)
+while True:
+    schedule.run_pending()
+    time.sleep(60)
+```
+</CodeGroup>
+
+<Note>
+  Set `minBalanceCredits` in the ingest body to pause sending if your credit balance drops below a threshold. Example: `"minBalanceCredits": 10` halts the batch if fewer than 10 credits remain.
+</Note>
+
+---
+
+## Step 4: The landing page flow
+
+Every postcard StageSnap mails includes a unique QR code. When a homeowner scans it, they land on a personalized page at:
+
+```
+https://stagesnap.ai/postcard/{recipientToken}
+```
+
+The page shows:
+
+- The homeowner's address pre-filled
+- Your campaign headline and subhead
+- A before/after AI-staged preview of their home
+- A confirmation button: "Yes, that's my home"
+
+When the homeowner confirms, StageSnap records the scan and fires any configured webhooks.
+
+---
+
+## Step 5: Route confirmed leads into your CRM
+
+There are two ways to get confirmed leads into your CRM: a direct outbound webhook from StageSnap to your CRM, or a Zapier/Make automation.
+
+### Option A: Zapier or Make
+
+The simplest path is to catch scan events via Zapier and push them to whatever CRM you use.
+
+<Steps>
+  <Step title="Create a Zapier webhook trigger">
+    In Zapier, create a new Zap with **Webhooks by Zapier → Catch Hook** as the trigger. Copy the webhook URL Zapier gives you.
+  </Step>
+
+  <Step title="Configure your campaign webhook URL">
+    In the StageSnap app, open your campaign and paste the Zapier webhook URL into the **Outbound Webhook URL** field. StageSnap will POST lead data to this URL every time a homeowner confirms.
+
+    The payload StageSnap sends:
+
+    ```json
+    {
+      "event": "scan.confirmed",
+      "campaignId": "campaign_abc123",
+      "recipientToken": "tok_xyz789",
+      "address": {
+        "addressLine1": "456 Oak Ave",
+        "city": "Austin",
+        "state": "TX",
+        "postalCode": "78701"
+      },
+      "ownerName": "Jane Smith",
+      "confirmedAt": "2026-03-05T14:30:00.000Z"
+    }
+    ```
+  </Step>
+
+  <Step title="Map fields to your CRM">
+    In Zapier, add a **Create Contact** action for your CRM (HubSpot, Follow Up Boss, Salesforce, etc.) and map the address and name fields. Add a tag like `stagesnap-lead` and a note with the campaign name.
+  </Step>
+</Steps>
+
+### Option B: Direct webhook handler
+
+If your CRM supports inbound webhooks, receive scan events directly without Zapier.
+
+```javascript Node.js — handle StageSnap scan event
+// Express endpoint — paste this URL as your campaign's Outbound Webhook URL
+app.post('/webhooks/stagesnap', async (req, res) => {
+  res.sendStatus(200); // acknowledge immediately
+
+  const { event, address, ownerName, campaignId, confirmedAt } = req.body;
+  if (event !== 'scan.confirmed') return;
+
+  // Push to Follow Up Boss
+  await fetch('https://api.followupboss.com/v1/events', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${Buffer.from(process.env.FUB_API_KEY + ':').toString('base64')}`,
+      'Content-Type': 'application/json',
+      'X-System': 'StageSnap',
+      'X-System-Key': process.env.FUB_SYSTEM_KEY,
+    },
+    body: JSON.stringify({
+      source: 'StageSnap Postcard',
+      type: 'Property Inquiry',
+      people: [{
+        firstName: ownerName?.split(' ')[0] || 'Homeowner',
+        lastName: ownerName?.split(' ').slice(1).join(' ') || '',
+        tags: ['stagesnap-lead'],
+        addresses: [{
+          street: address.addressLine1,
+          city: address.city,
+          state: address.state,
+          zip: address.postalCode,
+        }],
+      }],
+      note: `Homeowner confirmed via StageSnap postcard. Campaign: ${campaignId}. Confirmed: ${confirmedAt}`,
+    }),
+  });
+});
+```
+
+### Inbound CRM webhook (push from CRM → StageSnap)
+
+Your campaign also has a unique **CRM webhook token** that lets your CRM push recipient tokens back to StageSnap—for example, to record a conversion when a lead closes.
+
+```bash
+curl -X POST https://stagesnap.ai/api/postcards/crm-webhook/{webhookToken} \
+  -H "Content-Type: application/json" \
+  -d '{ "recipientToken": "tok_xyz789" }'
+```
+
+---
+
+## Full integration diagram
+
+```
+┌──────────────┐     POST /nearest + /ingest      ┌──────────────┐
+│  Your script │ ────────────────────────────────► │  StageSnap   │
+│  (cron/CRM)  │                                   │  campaign    │
+└──────────────┘                                   └──────┬───────┘
+                                                          │ prints + mails
+                                                          ▼
+                                                   ┌──────────────┐
+                                                   │  Homeowner   │
+                                                   │  scans QR    │
+                                                   └──────┬───────┘
+                                                          │ confirms address
+                                                          ▼
+                                                   ┌──────────────┐
+                                                   │  StageSnap   │
+                                                   │  fires event │
+                                                   └──────┬───────┘
+                                                          │ outbound webhook
+                                                          ▼
+                                              ┌───────────────────────┐
+                                              │  Zapier / Make / CRM  │
+                                              │  creates contact      │
+                                              └───────────────────────┘
+```
+
+---
+
+## Common patterns
+
+<AccordionGroup>
+  <Accordion title="New listing — mail nearest 200 homes once">
+    Create a campaign for the listing. Call `/api/postcards/nearest` with `count: 200`, then `/api/postcards/ingest`. No recurring schedule needed.
+  </Accordion>
+
+  <Accordion title="Farm area — mail every new homeowner quarterly">
+    Run the nearest + ingest flow every 90 days via cron. StageSnap deduplicates, so existing recipients are skipped and only new addresses receive a fresh postcard.
+  </Accordion>
+
+  <Accordion title="CRM-triggered — mail when a lead goes cold">
+    Set up a CRM automation: when a contact has had no activity for 30 days, POST their address to `/api/postcards/ingest`. The homeowner gets a postcard, scans the QR, and the re-engagement is recorded back in your CRM via the outbound webhook.
+  </Accordion>
+
+  <Accordion title="Multi-agent — one campaign per territory">
+    Create one campaign per geographic territory or agent. Each campaign has its own webhook token, so scan events route to the right agent in your CRM automatically.
+  </Accordion>
+</AccordionGroup>
