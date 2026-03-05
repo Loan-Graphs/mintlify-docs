@@ -53,6 +53,52 @@ security:
   - ApiKey: []
 
 paths:
+  /credits:
+    get:
+      operationId: getCredits
+      summary: Check credits remaining
+      description: |
+        Return the credit balance and subscription tier for the authenticated API key.
+        Use this to check how many credits you have before queuing a large batch of jobs.
+      tags:
+        - Account
+      responses:
+        "200":
+          description: Credit balance returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  creditsRemaining:
+                    type: number
+                    description: Number of transform credits remaining on this account
+                    example: 42
+                  tier:
+                    type: string
+                    enum: [free, pro, pro_video, enterprise]
+                    description: Subscription tier for this API key's account
+                    example: pro
+                  keyName:
+                    type: string
+                    description: The name you gave this API key when you created it
+                    example: "Production key"
+        "401":
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /stage:
     post:
       operationId: stageRoom

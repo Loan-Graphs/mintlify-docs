@@ -58,6 +58,12 @@
         "tab": "API Reference",
         "groups": [
           {
+            "group": "Account",
+            "pages": [
+              "api-reference/credits"
+            ]
+          },
+          {
             "group": "Images",
             "pages": [
               "api-reference/stage",
