@@ -1,0 +1,375 @@
+openapi: 3.0.3
+info:
+  title: StageSnap API
+  version: 1.0.0
+  description: |
+    The StageSnap API lets you generate AI-powered real estate images and videos
+    programmatically. Stage rooms, create marketing flyers, and generate listing
+    videos using the same models that power the StageSnap app.
+  contact:
+    name: StageSnap Support
+    url: https://stagesnap.ai
+servers:
+  - url: https://stagesnap.ai/api/v1
+    description: Production
+  - url: https://staging.stagesnap.ai/api/v1
+    description: Staging
+
+components:
+  securitySchemes:
+    ApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: sk_live_...
+      description: |
+        API keys are formatted as `sk_live_<32 hex chars>` for production or
+        `sk_test_<32 hex chars>` for testing. Pass the key in the `Authorization`
+        header: `Authorization: Bearer sk_live_...`
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Either imageUrl or imageBase64 is required"
+    ApiKeyUser:
+      type: object
+      properties:
+        userId:
+          type: string
+        keyId:
+          type: string
+        tier:
+          type: string
+          enum: [free, pro, pro_video, enterprise]
+        rateLimit:
+          type: integer
+          description: Requests per minute allowed for this key
+
+security:
+  - ApiKey: []
+
+paths:
+  /stage:
+    post:
+      operationId: stageRoom
+      summary: Stage a room
+      description: |
+        Generate a virtually staged image from a source photo. Furnishes empty
+        rooms, replaces existing furniture, or tidies a space using AI.
+      tags:
+        - Images
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                imageUrl:
+                  type: string
+                  format: uri
+                  description: URL of the source image. Required if `imageBase64` is not provided.
+                  example: "https://example.com/room.jpg"
+                imageBase64:
+                  type: string
+                  description: Base64-encoded source image (JPEG or PNG). Required if `imageUrl` is not provided.
+                style:
+                  type: string
+                  description: Staging style ID.
+                  enum:
+                    - modern
+                    - farmhouse
+                    - coastal
+                    - traditional
+                    - scandinavian
+                    - industrial
+                    - bohemian
+                    - mid_century
+                  example: "modern"
+                roomType:
+                  type: string
+                  description: Room type for optimized staging.
+                  enum:
+                    - living_room
+                    - bedroom
+                    - dining_room
+                    - kitchen
+                    - office
+                    - bathroom
+                    - exterior
+                  example: "living_room"
+                customInstructions:
+                  type: string
+                  description: Additional natural language instructions for the staging.
+                  example: "Add a cozy reading nook in the corner"
+                tidyRoom:
+                  type: boolean
+                  description: Clean and declutter the existing room before staging.
+                  default: false
+                freshStart:
+                  type: boolean
+                  description: Remove all existing furniture before staging.
+                  default: false
+      responses:
+        "200":
+          description: Staged image generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  taskId:
+                    type: string
+                    example: "task_abc123"
+                  image:
+                    type: string
+                    description: Base64-encoded JPEG of the staged result
+                  model:
+                    type: string
+                    example: "gemini-2.5-flash-preview-image"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: AI model error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /flyer:
+    post:
+      operationId: generateFlyer
+      summary: Generate a listing flyer
+      description: |
+        Create a branded marketing flyer image from a hero listing photo.
+        Supports multiple formats for print, social, and digital use.
+      tags:
+        - Images
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                imageUrl:
+                  type: string
+                  format: uri
+                  description: URL of the hero listing photo.
+                  example: "https://example.com/listing.jpg"
+                imageBase64:
+                  type: string
+                  description: Base64-encoded hero listing photo (alternative to `imageUrl`).
+                headline:
+                  type: string
+                  description: Main headline text on the flyer.
+                  default: "Just Listed"
+                  example: "Just Listed"
+                address:
+                  type: string
+                  description: Property address shown on the flyer.
+                  example: "123 Main St, Austin TX 78701"
+                format:
+                  type: string
+                  description: Output flyer format.
+                  enum:
+                    - letter_portrait
+                    - postcard_4x6
+                    - social_square
+                    - social_landscape
+                  default: "letter_portrait"
+      responses:
+        "200":
+          description: Flyer image generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  image:
+                    type: string
+                    description: Base64-encoded JPEG of the flyer
+                  model:
+                    type: string
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /video:
+    post:
+      operationId: generateVideo
+      summary: Generate a listing video
+      description: |
+        Kick off an AI video generation job from one or two source images.
+        Video generation is asynchronous — poll `/status/{taskId}` for progress
+        and the final video URL.
+      tags:
+        - Video
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+              properties:
+                type:
+                  type: string
+                  description: Video type.
+                  enum:
+                    - walkthrough
+                    - beforeAfter
+                    - construction
+                    - exterior
+                  example: "walkthrough"
+                style:
+                  type: string
+                  description: Motion style.
+                  enum:
+                    - smooth
+                    - dramatic
+                    - quick
+                  default: "smooth"
+                imageUrl:
+                  type: string
+                  format: uri
+                  description: First frame image URL.
+                imageBase64:
+                  type: string
+                  description: First frame image base64 (alternative to `imageUrl`).
+                lastFrameUrl:
+                  type: string
+                  format: uri
+                  description: Last frame image URL. Used for `beforeAfter`, `construction`, and `exterior` types.
+                lastFrameBase64:
+                  type: string
+                  description: Last frame image base64 (alternative to `lastFrameUrl`).
+                prompt:
+                  type: string
+                  description: Custom prompt override. If omitted, StageSnap generates an optimized prompt.
+                webhookUrl:
+                  type: string
+                  format: uri
+                  description: |
+                    Callback URL. When the video completes, StageSnap POSTs
+                    `{ taskId, status, videoUrl }` to this URL.
+      responses:
+        "200":
+          description: Video job started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  taskId:
+                    type: string
+                    description: Use this ID to poll `/status/{taskId}`
+                    example: "video_task_xyz789"
+                  status:
+                    type: string
+                    example: "processing"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /status/{taskId}:
+    get:
+      operationId: getVideoStatus
+      summary: Poll video status
+      description: |
+        Check the status of a video generation job. Poll this endpoint until
+        `status` is `"Success"` (video ready) or `"Fail"` (job failed).
+      tags:
+        - Video
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          description: The `taskId` returned by `POST /video`
+          schema:
+            type: string
+          example: "video_task_xyz789"
+      responses:
+        "200":
+          description: Task status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  taskId:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - processing
+                      - Success
+                      - Fail
+                    description: |
+                      - `processing` — still running, poll again in 5–10 seconds
+                      - `Success` — complete, `videoUrl` is set
+                      - `Fail` — job failed, check `error`
+                  videoUrl:
+                    type: string
+                    format: uri
+                    description: Direct URL to the generated MP4. Present when `status` is `"Success"`.
+                  error:
+                    type: string
+                    description: Error detail. Present when `status` is `"Fail"`.
+        "400":
+          description: Missing taskId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"

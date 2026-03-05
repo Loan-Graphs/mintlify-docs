@@ -1,0 +1,66 @@
+---
+title: Webhooks
+description: Receive callbacks when video generation jobs complete.
+---
+
+Instead of polling `/status/{taskId}`, pass a `webhookUrl` when you call
+`POST /api/v1/video`. StageSnap POSTs the result to your URL when the job
+finishes.
+
+## Webhook payload
+
+```json
+{
+  "taskId": "video_task_xyz789",
+  "status": "Success",
+  "videoUrl": "https://cdn.stagesnap.ai/videos/xyz789.mp4"
+}
+```
+
+On failure:
+
+```json
+{
+  "taskId": "video_task_xyz789",
+  "status": "Fail",
+  "error": "Model timeout — please retry"
+}
+```
+
+## Handle the callback
+
+Your endpoint must respond with HTTP `200` within 10 seconds. StageSnap does
+not retry failed deliveries.
+
+```javascript Express example
+app.post('/hooks/stagesnap', (req, res) => {
+  const { taskId, status, videoUrl, error } = req.body;
+
+  if (status === 'Success') {
+    // save videoUrl to your database
+    console.log('Video ready:', videoUrl);
+  } else {
+    console.error('Video failed:', error);
+  }
+
+  res.sendStatus(200); // respond quickly
+});
+```
+
+<Warning>
+  Always respond with `200` before doing any heavy processing. If your handler
+  times out, the callback is treated as failed. Use a job queue for downstream
+  work.
+</Warning>
+
+## Local testing
+
+Use a tunnel tool like [ngrok](https://ngrok.com) or [localtunnel](https://localtunnel.me)
+to expose your local server during development.
+
+```bash
+ngrok http 3000
+# Forwarding: https://abc123.ngrok.io -> http://localhost:3000
+```
+
+Then pass `https://abc123.ngrok.io/hooks/stagesnap` as your `webhookUrl`.

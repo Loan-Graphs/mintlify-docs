@@ -1,0 +1,88 @@
+---
+title: Stage a room
+description: Generate virtually staged photos from empty or furnished rooms.
+---
+
+Virtual staging replaces empty space or existing furniture with AI-generated
+furnishings. This guide covers the common staging scenarios.
+
+## Stage an empty room
+
+Pass a `style` and `roomType` to get a fully furnished result.
+
+```json
+{
+  "imageUrl": "https://example.com/empty-bedroom.jpg",
+  "style": "scandinavian",
+  "roomType": "bedroom"
+}
+```
+
+## Available styles
+
+| Style ID        | Description                              |
+| --------------- | ---------------------------------------- |
+| `modern`        | Clean lines, neutral palette, minimal    |
+| `farmhouse`     | Warm wood tones, shiplap, vintage accents |
+| `coastal`       | Light blues, natural textures, breezy    |
+| `traditional`   | Rich fabrics, ornate details, symmetry   |
+| `scandinavian`  | White walls, natural wood, functional    |
+| `industrial`    | Exposed brick, metal, dark tones         |
+| `bohemian`      | Layered textiles, eclectic, colorful     |
+| `mid_century`   | Retro curves, bold colors, tapered legs  |
+
+## Clear existing furniture
+
+Set `freshStart: true` to virtually empty the room before staging. Useful when
+the room is cluttered or the current furniture doesn't match the target style.
+
+```json
+{
+  "imageUrl": "https://example.com/cluttered-living-room.jpg",
+  "style": "modern",
+  "roomType": "living_room",
+  "freshStart": true
+}
+```
+
+## Tidy without restaging
+
+Set `tidyRoom: true` to declutter the space without replacing furniture. Good
+for occupied listings where you want a cleaner look.
+
+```json
+{
+  "imageUrl": "https://example.com/messy-kitchen.jpg",
+  "tidyRoom": true
+}
+```
+
+## Add custom instructions
+
+Use `customInstructions` to describe specific changes beyond the style preset.
+
+```json
+{
+  "imageUrl": "https://example.com/office.jpg",
+  "style": "modern",
+  "roomType": "office",
+  "customInstructions": "Add a large bookshelf on the left wall and a standing desk"
+}
+```
+
+## Use base64 instead of a URL
+
+If you don't have a public URL, send the image as base64 in `imageBase64`.
+
+```json
+{
+  "imageBase64": "/9j/4AAQSkZJRgAB...",
+  "style": "coastal",
+  "roomType": "living_room"
+}
+```
+
+<Note>
+  Images must be JPEG or PNG and under 10 MB. For best results use a
+  photo taken at eye level with even lighting and no strong shadows.
+</Note>

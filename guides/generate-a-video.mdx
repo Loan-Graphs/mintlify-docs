@@ -1,0 +1,81 @@
+---
+title: Generate a video
+description: Create listing videos from staged photos using the StageSnap video API.
+---
+
+Video generation is asynchronous. You start a job with `POST /api/v1/video`,
+then poll `GET /api/v1/status/{taskId}` until the video is ready.
+
+## Video types
+
+| Type          | Images required  | Description                                    |
+| ------------- | ---------------- | ---------------------------------------------- |
+| `walkthrough` | First frame      | Camera pans through a staged room              |
+| `beforeAfter` | First + last     | Transition from original to staged             |
+| `construction` | First + last    | Time-lapse style from construction to finished |
+| `exterior`    | First + last     | Day-to-night or season change exterior shot    |
+
+## Start a video job
+
+```bash cURL
+curl -X POST https://stagesnap.ai/api/v1/video \
+  -H "Authorization: Bearer sk_live_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "walkthrough",
+    "style": "smooth",
+    "imageUrl": "https://example.com/staged-living-room.jpg"
+  }'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "taskId": "video_task_xyz789",
+  "status": "processing"
+}
+```
+
+## Poll for completion
+
+Check status every 5–10 seconds until `status` is `"Success"` or `"Fail"`.
+
+```javascript
+async function waitForVideo(taskId, apiKey) {
+  while (true) {
+    const res = await fetch(`https://stagesnap.ai/api/v1/status/${taskId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await res.json();
+
+    if (data.status === 'Success') return data.videoUrl;
+    if (data.status === 'Fail') throw new Error(data.error);
+
+    await new Promise(r => setTimeout(r, 6000)); // wait 6 seconds
+  }
+}
+```
+
+## Use webhooks instead of polling
+
+Pass a `webhookUrl` to receive a callback when the job finishes. See
+[Webhooks](/guides/webhooks) for the payload format and verification.
+
+```json
+{
+  "type": "beforeAfter",
+  "imageUrl": "https://example.com/empty-room.jpg",
+  "lastFrameUrl": "https://example.com/staged-room.jpg",
+  "webhookUrl": "https://yourapp.com/hooks/stagesnap"
+}
+```
+
+## Motion styles
+
+| Style     | Description                                |
+| --------- | ------------------------------------------ |
+| `smooth`  | Gentle, slow pan — best for listings       |
+| `dramatic` | Dynamic movement with dramatic lighting   |
+| `quick`   | Fast cut, punchy — good for social content |

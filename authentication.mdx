@@ -1,0 +1,48 @@
+---
+title: Authentication
+description: How to authenticate requests to the StageSnap API.
+---
+
+The StageSnap API uses API key authentication. Include your key as a bearer
+token in the `Authorization` header of every request.
+
+```http
+Authorization: Bearer sk_live_your_key_here
+```
+
+## Get an API key
+
+1. Log in to [stagesnap.ai](https://stagesnap.ai).
+2. Go to **Settings → API Keys**.
+3. Select **Generate new key** and give it a name.
+4. Copy the key — it is only shown once.
+
+## Key format
+
+| Environment | Prefix      | Example                          |
+| ----------- | ----------- | -------------------------------- |
+| Production  | `sk_live_`  | `sk_live_a1b2c3d4...`            |
+| Test        | `sk_test_`  | `sk_test_e5f6g7h8...`            |
+
+Test keys work against both production and staging endpoints but do not consume
+credits.
+
+## Rate limits
+
+Rate limits depend on your plan:
+
+| Plan       | Requests per minute |
+| ---------- | ------------------- |
+| Free       | 5                   |
+| Pro        | 60                  |
+| Pro+Video  | 120                 |
+| Enterprise | Custom              |
+
+When you exceed your limit the API returns HTTP `429`. Retry after the interval
+in the `Retry-After` header.
+
+## Keep keys secure
+
+- Never expose API keys in client-side code or public repositories.
+- Use environment variables: `STAGESNAP_API_KEY=sk_live_...`
+- Rotate keys immediately if compromised—use **Settings → API Keys** to revoke.

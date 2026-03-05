@@ -1,80 +1,99 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Stage your first room in under 5 minutes.
 ---
 
-## Get started in three steps
+This guide walks you through staging a room photo using the StageSnap API.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+- A StageSnap account at [stagesnap.ai](https://stagesnap.ai)
+- An API key (see [Authentication](/authentication))
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## Stage a room
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Get a source image">
+    You need a URL or base64-encoded JPEG/PNG of the room you want to stage.
+    For this example we use a public URL.
+  </Step>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+  <Step title="Send a staging request">
+    Call `POST /api/v1/stage` with your image and desired style.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    <CodeGroup>
+      ```bash cURL
+      curl -X POST https://stagesnap.ai/api/v1/stage \
+        -H "Authorization: Bearer sk_live_your_key_here" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "imageUrl": "https://example.com/empty-living-room.jpg",
+          "style": "modern",
+          "roomType": "living_room"
+        }'
+      ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+      ```javascript Node.js
+      const response = await fetch('https://stagesnap.ai/api/v1/stage', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer sk_live_your_key_here',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageUrl: 'https://example.com/empty-living-room.jpg',
+          style: 'modern',
+          roomType: 'living_room',
+        }),
+      });
 
-### Step 3: Go live
+      const data = await response.json();
+      console.log(data.image); // base64 JPEG
+      ```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+      ```python Python
+      import requests, base64
+
+      response = requests.post(
+          "https://stagesnap.ai/api/v1/stage",
+          headers={"Authorization": "Bearer sk_live_your_key_here"},
+          json={
+              "imageUrl": "https://example.com/empty-living-room.jpg",
+              "style": "modern",
+              "roomType": "living_room",
+          },
+      )
+
+      data = response.json()
+      # Save the result
+      with open("staged.jpg", "wb") as f:
+          f.write(base64.b64decode(data["image"]))
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Use the result">
+    The response includes a base64-encoded JPEG in the `image` field. Decode and
+    display or save it.
+
+    ```json
+    {
+      "success": true,
+      "taskId": "task_abc123",
+      "image": "/9j/4AAQSkZJRgAB...",
+      "model": "gemini-2.5-flash-preview-image"
+    }
+    ```
+  </Step>
+</Steps>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="All staging options" icon="sliders" href="/api-reference/stage">
+    Full reference for the stage endpoint—styles, room types, and custom instructions.
+  </Card>
+  <Card title="Generate a video" icon="video" href="/guides/generate-a-video">
+    Turn staged photos into walkthrough or before/after videos.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
