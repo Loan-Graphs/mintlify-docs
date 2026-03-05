@@ -30,15 +30,6 @@
     }
   },
   "navigation": {
-    "global": {
-      "anchors": [
-        {
-          "anchor": "StageSnap app",
-          "icon": "house",
-          "href": "https://stagesnap.ai"
-        }
-      ]
-    },
     "tabs": [
       {
         "tab": "Documentation",
@@ -55,6 +46,7 @@
             "group": "Guides",
             "pages": [
               "guides/stage-a-room",
+              "guides/editing-rooms",
               "guides/generate-a-video",
               "guides/webhooks",
               "guides/postcard-campaigns"
@@ -81,7 +73,16 @@
           }
         ]
       }
-    ]
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "StageSnap app",
+          "href": "https://stagesnap.ai",
+          "icon": "house"
+        }
+      ]
+    }
   },
   "contextual": {
     "options": [

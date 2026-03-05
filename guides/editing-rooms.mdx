@@ -1,0 +1,328 @@
+---
+title: Editing rooms
+description: Tidy a room, remove objects, and send custom instructions to the staging API.
+---
+
+Beyond full virtual staging, StageSnap can make targeted edits to existing photos: declutter and tidy a space, surgically remove objects, or guide the AI with custom instructions. This guide covers all three.
+
+---
+
+## Tidy a room
+
+The tidy operation declutters a photo without replacing any furniture. It removes personal items, straightens surfaces, and produces a clean, listing-ready version of the existing space.
+
+**What it removes:**
+- Clothes, shoes, bags left on furniture or floors
+- Dishes, food, drinks left out
+- Papers, mail, scattered personal items
+- Toys, pet items, excess decor
+- Trash and random clutter
+
+**What it preserves:**
+- All furniture and major decor
+- Room structure, perspective, and lighting
+- Photorealistic quality
+
+### Tidy via the stage endpoint
+
+Pass `tidyRoom: true` to the `POST /api/v1/stage` endpoint. You can combine it with a style to tidy and restage in one call, or use it alone to clean without changing furniture.
+
+```bash cURL — tidy only
+curl -X POST https://stagesnap.ai/api/v1/stage \
+  -H "Authorization: Bearer sk_live_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imageUrl": "https://example.com/messy-bedroom.jpg",
+    "tidyRoom": true
+  }'
+```
+
+```bash cURL — tidy then restage
+curl -X POST https://stagesnap.ai/api/v1/stage \
+  -H "Authorization: Bearer sk_live_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imageUrl": "https://example.com/cluttered-living-room.jpg",
+    "tidyRoom": true,
+    "style": "modern",
+    "roomType": "living_room"
+  }'
+```
+
+### Tidy an exterior
+
+For outdoor photos, tidy cleans up the yard, trims overgrowth, removes clutter, and improves curb appeal. Pass `roomType: "exterior"` alongside `tidyRoom: true`.
+
+```bash cURL — tidy exterior
+curl -X POST https://stagesnap.ai/api/v1/stage \
+  -H "Authorization: Bearer sk_live_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imageUrl": "https://example.com/overgrown-front-yard.jpg",
+    "tidyRoom": true,
+    "roomType": "exterior"
+  }'
+```
+
+The exterior tidy:
+- Mows and greens the lawn
+- Trims overgrown hedges and bushes
+- Removes trash cans, hoses, and clutter
+- Cleans the driveway and walkways
+- Tidies the front door and porch area
+
+### Fresh start before staging
+
+Use `freshStart: true` to virtually empty a room before staging it with new furniture. Combine with `style` and `roomType` for a clean slate.
+
+```json
+{
+  "imageUrl": "https://example.com/outdated-living-room.jpg",
+  "freshStart": true,
+  "style": "scandinavian",
+  "roomType": "living_room"
+}
+```
+
+<Tip>
+  Use `tidyRoom` when the client wants to show their existing furniture in better condition. Use `freshStart` when you want to replace everything with a new style.
+</Tip>
+
+---
+
+## Remove an object
+
+The edit endpoint removes specific objects from a photo using coordinate pins. You mark what to remove and where it is, and the AI fills in the background as if the object was never there.
+
+**What the removal does:**
+- Removes the entire object including shadows and reflections
+- Fills the area with appropriate floor, wall, or background content
+- Leaves no artifacts, ghosting, or visible editing marks
+
+### Endpoint
+
+```
+POST /api/gemini/edit
+```
+
+<Note>
+  The edit endpoint uses session authentication — the request must come from a logged-in StageSnap session (cookie-based auth). For server-to-server integrations, contact support for API key access.
+</Note>
+
+### Request body
+
+| Field          | Type    | Required | Description |
+| -------------- | ------- | -------- | ----------- |
+| `imageBase64`  | string  | Yes*     | Base64-encoded JPEG or PNG |
+| `imageUrl`     | string  | Yes*     | URL of the source image (fetched server-side) |
+| `editType`     | string  | Yes      | `"edit"` for add/remove pins |
+| `pins`         | array   | Yes      | Array of pin objects (see below) |
+| `roomType`     | string  | No       | `"exterior"` activates outdoor-specific removal logic |
+
+*One of `imageBase64` or `imageUrl` is required.
+
+### Pin object
+
+| Field         | Type   | Description |
+| ------------- | ------ | ----------- |
+| `id`          | string | Unique ID for this pin (e.g. `"pin-1"`) |
+| `x`           | number | Horizontal position as a percentage (0–100, left to right) |
+| `y`           | number | Vertical position as a percentage (0–100, top to bottom) |
+| `type`        | string | `"remove"` to delete the object, `"add"` to add one |
+| `description` | string | Plain-language description of the object to remove or add |
+
+### Remove a single object
+
+```bash cURL
+curl -X POST https://stagesnap.ai/api/gemini/edit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imageUrl": "https://example.com/kitchen.jpg",
+    "editType": "edit",
+    "pins": [
+      {
+        "id": "pin-1",
+        "x": 45,
+        "y": 70,
+        "type": "remove",
+        "description": "old microwave on the counter"
+      }
+    ]
+  }'
+```
+
+### Remove multiple objects in one pass
+
+```javascript Node.js
+const response = await fetch('https://stagesnap.ai/api/gemini/edit', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    imageUrl: 'https://example.com/living-room.jpg',
+    editType: 'edit',
+    pins: [
+      { id: 'pin-1', x: 20, y: 80, type: 'remove', description: 'old exercise bike in corner' },
+      { id: 'pin-2', x: 55, y: 60, type: 'remove', description: 'worn out coffee table' },
+      { id: 'pin-3', x: 80, y: 75, type: 'remove', description: 'pile of boxes on the floor' },
+    ],
+  }),
+});
+
+const { image } = await response.json();
+// image is base64 JPEG with all three items removed
+```
+
+### Remove and add in the same call
+
+You can mix `"add"` and `"remove"` pins in a single request to make combined edits in one AI pass.
+
+```json
+{
+  "imageUrl": "https://example.com/bedroom.jpg",
+  "editType": "edit",
+  "pins": [
+    { "id": "pin-1", "x": 30, "y": 75, "type": "remove", "description": "old TV on dresser" },
+    { "id": "pin-2", "x": 70, "y": 50, "type": "add", "description": "modern floor lamp" }
+  ]
+}
+```
+
+### Remove outdoor objects
+
+For exterior photos, pass `roomType: "exterior"` to activate outdoor-specific removal logic — the AI will replace removed elements with lawn, mulch, or appropriate ground cover instead of floor or wall fill.
+
+```json
+{
+  "imageUrl": "https://example.com/front-yard.jpg",
+  "editType": "edit",
+  "roomType": "exterior",
+  "pins": [
+    { "id": "pin-1", "x": 60, "y": 80, "type": "remove", "description": "rusty chain-link fence section" },
+    { "id": "pin-2", "x": 25, "y": 65, "type": "remove", "description": "dead tree stump" }
+  ]
+}
+```
+
+### Response
+
+```json
+{
+  "image": "/9j/4AAQSkZJRgAB...",
+  "model": "gemini-3-flash-preview"
+}
+```
+
+`image` is a base64-encoded JPEG with the edits applied.
+
+---
+
+## Custom instructions
+
+Every staging call accepts a `customInstructions` field that gives the AI natural language direction beyond the style preset. Use it to request specific furniture, describe desired outcomes, or restrict what gets changed.
+
+### When to use custom instructions
+
+| Goal | Example instruction |
+| ---- | ------------------- |
+| Specific furniture | `"Add a white sectional sofa, not a dark one"` |
+| Room-specific details | `"Keep the exposed brick wall visible"` |
+| Outcome-focused | `"Stage as a home office with a standing desk and bookshelf"` |
+| Restrictions | `"Do not change the hardwood floors or ceiling beams"` |
+| Brand style | `"Use only neutral tones — beige, white, and natural wood"` |
+
+### Stage with custom instructions
+
+```bash cURL
+curl -X POST https://stagesnap.ai/api/v1/stage \
+  -H "Authorization: Bearer sk_live_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imageUrl": "https://example.com/empty-loft.jpg",
+    "style": "industrial",
+    "roomType": "living_room",
+    "customInstructions": "Add a large sectional sofa facing a wall-mounted TV. Include an exposed pipe shelving unit on the left wall. Keep the concrete floors and exposed ceiling beams untouched."
+  }'
+```
+
+### Custom instructions with tidy
+
+Custom instructions also apply when tidying. Tell the AI what to keep or specifically target:
+
+```json
+{
+  "imageUrl": "https://example.com/home-office.jpg",
+  "tidyRoom": true,
+  "customInstructions": "Keep the whiteboard on the wall but remove all papers and clutter from the desk. Tidy the cable management under the desk."
+}
+```
+
+### Writing effective instructions
+
+<AccordionGroup>
+  <Accordion title="Be specific about items">
+    Vague: `"Add some furniture"`
+    
+    Specific: `"Add a light grey linen sofa, a round white coffee table, and two black side tables"`
+    
+    The more specific the description, the more accurately the AI places what you want.
+  </Accordion>
+
+  <Accordion title="Describe position when it matters">
+    If placement is important, describe it: `"Place a reading chair in the far left corner next to the window"`. The AI uses the image context plus your description to position items naturally.
+  </Accordion>
+
+  <Accordion title="State what to preserve">
+    If you want to protect specific elements: `"Do not change the kitchen backsplash or island countertop color"`. Preservation instructions reduce unintended changes to the areas you want left alone.
+  </Accordion>
+
+  <Accordion title="Use outcome language">
+    Describe the finished look rather than the steps: `"Stage this as a cozy reading nook with warm lighting"` works better than `"Add a chair, a lamp, and a bookshelf"`. The AI interprets the intent and picks complementary pieces.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Combining operations
+
+You can chain these calls to build multi-step editing workflows.
+
+### Example: tidy, then remove, then stage
+
+```javascript Node.js
+async function fullEdit(imageUrl, apiKey) {
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  // Step 1: Tidy the room
+  const tidied = await fetch('https://stagesnap.ai/api/v1/stage', {
+    method: 'POST', headers,
+    body: JSON.stringify({ imageUrl, tidyRoom: true }),
+  }).then(r => r.json());
+
+  // Step 2: Remove the old couch
+  const removed = await fetch('https://stagesnap.ai/api/gemini/edit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, // session auth
+    body: JSON.stringify({
+      imageBase64: tidied.image,
+      editType: 'edit',
+      pins: [{ id: 'p1', x: 50, y: 70, type: 'remove', description: 'old brown couch' }],
+    }),
+  }).then(r => r.json());
+
+  // Step 3: Stage with custom style
+  const staged = await fetch('https://stagesnap.ai/api/v1/stage', {
+    method: 'POST', headers,
+    body: JSON.stringify({
+      imageBase64: removed.image,
+      style: 'modern',
+      roomType: 'living_room',
+      customInstructions: 'Keep the fireplace as the focal point and stage around it',
+    }),
+  }).then(r => r.json());
+
+  return staged.image; // base64 JPEG — fully staged result
+}
+```
