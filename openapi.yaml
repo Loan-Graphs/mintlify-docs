@@ -26,6 +26,26 @@ components:
         `sk_test_<32 hex chars>` for testing. Pass the key in the `Authorization`
         header: `Authorization: Bearer sk_live_...`
   schemas:
+    Folder:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique folder ID. Pass this as `folderId` in stage requests.
+          example: "j57abc123def456"
+        name:
+          type: string
+          example: "123 Main St — Spring 2026"
+        rooms:
+          type: array
+          items:
+            type: string
+          description: Room labels associated with this folder.
+          example: ["Living Room", "Master Bedroom"]
+        createdAt:
+          type: number
+          description: Unix timestamp (milliseconds) when the folder was created.
+          example: 1741200000000
     Error:
       type: object
       properties:
@@ -53,6 +73,83 @@ security:
   - ApiKey: []
 
 paths:
+  /folders:
+    get:
+      operationId: listFolders
+      summary: List project folders
+      description: |
+        Return all project folders for this API key's account. Use folder IDs
+        to tag staged images and keep renders organized by property or project.
+      tags:
+        - Account
+      responses:
+        "200":
+          description: Folders returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  folders:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Folder"
+        "401":
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createFolder
+      summary: Create a project folder
+      description: |
+        Create a new project folder. Returns the folder ID you pass to
+        `POST /stage` (and other image endpoints) to group renders by property or project.
+      tags:
+        - Account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: Display name for the folder.
+                  example: "123 Main St — Spring 2026"
+      responses:
+        "200":
+          description: Folder created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  folder:
+                    $ref: "#/components/schemas/Folder"
+        "400":
+          description: Missing or invalid name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /credits:
     get:
       operationId: getCredits
@@ -160,6 +257,12 @@ paths:
                   type: boolean
                   description: Remove all existing furniture before staging.
                   default: false
+                folderId:
+                  type: string
+                  description: |
+                    Project folder ID. Pass the ID returned by `POST /folders` to tag
+                    this render to a folder. Echoed back in the response.
+                  example: "j57abc123def456"
       responses:
         "200":
           description: Staged image generated successfully
@@ -180,6 +283,10 @@ paths:
                   model:
                     type: string
                     example: "gemini-2.5-flash-preview-image"
+                  folderId:
+                    type: string
+                    description: Echoed from the request when provided.
+                    example: "j57abc123def456"
         "400":
           description: Invalid request
           content:

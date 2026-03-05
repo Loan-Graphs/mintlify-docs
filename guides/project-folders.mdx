@@ -1,0 +1,192 @@
+---
+title: Project folders
+description: Organize staged images by property or project using folders, then tag every render with a folder ID.
+---
+
+Project folders let you group staged images by property, listing, or any logical unit you choose. Create a folder once, then pass its ID in every staging call for that project. The folder and its renders are visible in the StageSnap app under the same account.
+
+## How it works
+
+```
+POST /folders  →  folderId: "j57abc123"
+                        │
+          ┌─────────────┼─────────────┐
+          ▼             ▼             ▼
+POST /stage        POST /stage   POST /stage
+folderId: "j57…"  folderId: "j57…"  folderId: "j57…"
+Living Room       Bedroom       Exterior
+```
+
+One folder per property. Multiple stage calls all tagged to it.
+
+---
+
+## Step 1: Create a folder
+
+Create one folder per property or project. Use the property address or a memorable name.
+
+```bash cURL
+curl -X POST https://stagesnap.ai/api/v1/folders \
+  -H "Authorization: Bearer sk_live_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "123 Main St — Spring 2026" }'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "folder": {
+    "id": "j57abc123def456",
+    "name": "123 Main St — Spring 2026",
+    "rooms": [],
+    "createdAt": 1741200000000
+  }
+}
+```
+
+Save the `id` — you'll pass it as `folderId` in every staging call for this property.
+
+---
+
+## Step 2: Stage rooms into the folder
+
+Pass `folderId` in the request body of `POST /stage`. The render is tagged to that folder and it appears in the StageSnap app under the matching project.
+
+```bash cURL — living room
+curl -X POST https://stagesnap.ai/api/v1/stage \
+  -H "Authorization: Bearer sk_live_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imageUrl": "https://example.com/123-main-living.jpg",
+    "style": "modern",
+    "roomType": "living_room",
+    "folderId": "j57abc123def456"
+  }'
+```
+
+```bash cURL — bedroom
+curl -X POST https://stagesnap.ai/api/v1/stage \
+  -H "Authorization: Bearer sk_live_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imageUrl": "https://example.com/123-main-bedroom.jpg",
+    "style": "modern",
+    "roomType": "bedroom",
+    "folderId": "j57abc123def456"
+  }'
+```
+
+The `folderId` is echoed back in each response so you can confirm the association:
+
+```json
+{
+  "success": true,
+  "image": "/9j/4AAQSkZJRgAB...",
+  "style": "Modern",
+  "model": "gemini-2.5-flash-preview-image",
+  "folderId": "j57abc123def456"
+}
+```
+
+---
+
+## Step 3: List your folders
+
+Retrieve all folders to look up IDs for ongoing projects or to display a project list in your own interface.
+
+```bash cURL
+curl https://stagesnap.ai/api/v1/folders \
+  -H "Authorization: Bearer sk_live_your_key_here"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "folders": [
+    {
+      "id": "j57abc123def456",
+      "name": "123 Main St — Spring 2026",
+      "rooms": ["Living Room", "Bedroom"],
+      "createdAt": 1741200000000
+    },
+    {
+      "id": "k88xyz789ghi012",
+      "name": "456 Oak Ave — Exterior Refresh",
+      "rooms": ["Exterior"],
+      "createdAt": 1741100000000
+    }
+  ]
+}
+```
+
+---
+
+## Full workflow example
+
+```javascript Node.js
+const API_KEY = process.env.STAGESNAP_API_KEY;
+const BASE = 'https://stagesnap.ai/api/v1';
+const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
+
+async function stageProperty(address, rooms) {
+  // 1. Create a folder for this property
+  const folderRes = await fetch(`${BASE}/folders`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ name: address }),
+  });
+  const { folder } = await folderRes.json();
+  console.log('Folder created:', folder.id);
+
+  // 2. Stage each room into the folder
+  const results = await Promise.all(
+    rooms.map(({ imageUrl, roomType, style }) =>
+      fetch(`${BASE}/stage`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          imageUrl,
+          roomType,
+          style,
+          folderId: folder.id,
+        }),
+      }).then(r => r.json())
+    )
+  );
+
+  console.log(`Staged ${results.length} rooms into folder "${address}"`);
+  return { folderId: folder.id, renders: results };
+}
+
+// Example usage
+await stageProperty('123 Main St, Austin TX 78701', [
+  { imageUrl: 'https://cdn.example.com/living.jpg', roomType: 'living_room', style: 'modern' },
+  { imageUrl: 'https://cdn.example.com/bedroom.jpg', roomType: 'bedroom', style: 'modern' },
+  { imageUrl: 'https://cdn.example.com/kitchen.jpg', roomType: 'kitchen', style: 'modern' },
+]);
+```
+
+---
+
+## Tips
+
+<AccordionGroup>
+  <Accordion title="One folder per listing, not per style">
+    Create a single folder per property and stage multiple rooms and styles into it. This matches how the StageSnap app organizes projects.
+  </Accordion>
+
+  <Accordion title="Persist folder IDs in your database">
+    Store the `folderId` alongside each listing in your own database. That way you can quickly look up a folder ID when you need to add more renders to an existing project without calling `GET /folders` first.
+  </Accordion>
+
+  <Accordion title="Check credits before large batches">
+    Before staging an entire listing with many rooms, call `GET /credits` to verify you have enough credits. Each stage call uses one credit.
+
+    ```javascript
+    const { creditsRemaining } = await fetch(`${BASE}/credits`, { headers }).then(r => r.json());
+    if (creditsRemaining < rooms.length) throw new Error('Not enough credits');
+    ```
+  </Accordion>
+</AccordionGroup>

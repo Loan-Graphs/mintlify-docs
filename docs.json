@@ -47,6 +47,7 @@
             "pages": [
               "guides/stage-a-room",
               "guides/editing-rooms",
+              "guides/project-folders",
               "guides/generate-a-video",
               "guides/webhooks",
               "guides/postcard-campaigns"
@@ -60,7 +61,9 @@
           {
             "group": "Account",
             "pages": [
-              "api-reference/credits"
+              "api-reference/credits",
+              "api-reference/folders-list",
+              "api-reference/folders-create"
             ]
           },
           {
